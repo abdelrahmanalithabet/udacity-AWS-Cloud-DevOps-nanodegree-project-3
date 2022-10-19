@@ -218,38 +218,36 @@ jobs:
       - image: circleci/node:13.8.0
     steps:
       - checkout
-      - run:
-          name: install awscli
-          command: |
-            sudo apt-get update
-            sudo apt-get -y install awscli
+      - attach_workspace:
+          at: ~/
+      - restore_cache:
+          keys: [backend-build]
       - run:
           name: Run migrations
           command: |
-            cd backend/
-            echo > ".env"
-            echo ENVIRONMENT="production" >> ".env"
-            echo TYPEORM_CONNECTION=$TYPEORM_CONNECTION >> ".env"
-            echo TYPEORM_MIGRATIONS_DIR=$TYPEORM_MIGRATIONS_DIR >> ".env"
-            echo TYPEORM_ENTITIES=$TYPEORM_ENTITIES >> ".env"
-            echo TYPEORM_MIGRATIONS=$TYPEORM_MIGRATIONS >> ".env"
-            echo TYPEORM_HOST=$TYPEORM_HOST >> ".env"
-            echo TYPEORM_PORT=$TYPEORM_PORT >> ".env"
-            echo TYPEORM_USERNAME=$TYPEORM_USERNAME >> ".env"
-            echo TYPEORM_PASSWORD=$TYPEORM_PASSWORD >> ".env"
-            echo TYPEORM_DATABASE=$TYPEORM_DATABASE >> ".env"
-            npm i
-            npm run migrations >> result.txt
+            cd backend
+            cat .env
+            npm run migrations >> migrations.txt
+            cat migrations.txt
       - run:
           name: Send migration results to memstash
           command: |
-            cd backend/
-            cat result.txt
-            RESULT=$(grep -Fc "has been executed successfully" result.txt)
-            curl -H "Content-Type: text/plain" -H "token: migration-${CIRCLE_WORKFLOW_ID}" --request PUT --data ${RESULT} https://api.memstash.io/values/migration_result
+            cd backend
+            if grep -q "success" migrations.txt then
+              curl -H "Content-Type: text/plain" -H "token: 974a9eac-715e-40e8-926f-7203819cb709" \
+                --request PUT \
+                --data '1' \
+                https://api.memstash.io/values/udacity-project-03-senavs-migrations
+            else
+              curl -H "Content-Type: text/plain" -H "token: 974a9eac-715e-40e8-926f-7203819cb709" \
+                --request PUT \
+                --data '0' \
+                https://api.memstash.io/values/udacity-project-03-senavs-migrations
+            fi
+            echo Key: migrations-${CIRCLE_WORKFLOW_ID:0:17}
+      - destroy-environment:
+          workflow_id: ${CIRCLE_WORKFLOW_ID:0:17}
       - revert-migrations
-      - destroy-environment
-
 #  deploy-frontend:
 #    docker:
 #      # Docker image here that supports AWS CLI
